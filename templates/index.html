@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESP Tunnel Mode, step by step</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+:root{--bg:#e9eef0;--ink:#12203a;--muted:#5a6679;--line:#cdd6d9;--panel:#fbfcfc;--navy:#0e1a33;
+--c-ip:#1b998b;--c-esp:#f0a52e;--c-iv:#7b6cb8;--c-enc:#26364f;--c-icv:#d4553a;--ok:#1d7a4d;--bad:#b3392a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "IBM Plex Sans",system-ui,sans-serif}
+header{background:var(--navy);color:#fff;padding:40px 20px 84px;background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px);background-size:22px 22px}
+.wrap{max-width:1000px;margin:0 auto}
+h1{font-size:2.3rem;line-height:1.15;margin:0 0 10px;letter-spacing:-.02em;max-width:18ch}
+header p{color:#b9c6dc;max-width:62ch;margin:0 0 18px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid #3b4d73;border-radius:20px;padding:4px 14px;font-size:.88rem;color:#e6edf8}
+.chip i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px}
+main{max-width:1000px;margin:-56px auto 0;padding:0 20px 64px}
+section,.stage{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin-bottom:16px;box-shadow:0 8px 22px -14px rgba(14,26,51,.35)}
+h2{font-size:1.15rem;margin:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:12px}
+label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:3px}
+input{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);font:inherit}
+input:focus,button:focus-visible{outline:2px solid var(--c-ip);outline-offset:1px}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+button{font:inherit;font-weight:600;padding:10px 18px;border-radius:6px;border:1px solid var(--c-ip);background:var(--c-ip);color:#fff;cursor:pointer;transition:transform .12s}
+button:active{transform:translateY(1px)}
+button.ghost{background:transparent;color:var(--ink);border-color:var(--ink)}
+button.warn{background:var(--c-icv);border-color:var(--c-icv)}
+button:hover{filter:brightness(1.08)}
+.path{position:relative;display:flex;align-items:center;padding:34px 12px 16px;overflow-x:auto}
+.node{flex:0 0 112px;text-align:center;padding:12px 6px;border:2px solid var(--line);border-radius:10px;background:#fff;font-size:.8rem;color:var(--muted);transition:border-color .3s,background .3s}
+.node b{display:block;color:var(--ink);font-size:.95rem}
+.node svg{width:30px;height:30px;stroke:var(--muted);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;margin-bottom:2px}
+.node.on{border-color:var(--c-ip);background:#e0f3f0}.node.on svg{stroke:var(--c-ip)}
+.node.net{border-style:dashed}
+.link{flex:1 0 24px;min-width:24px;height:0;border-top:3px dotted var(--line)}
+.token{position:absolute;top:2px;left:0;transform:translateX(-50%);padding:3px 12px;border-radius:14px;font-size:.78rem;font-weight:600;color:#fff;background:var(--c-ip);white-space:nowrap;transition:left .7s ease,background .3s}
+.token::after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-bottom:0;border-top-color:inherit}
+.token.enc{background:var(--c-enc)}.token.bad{background:var(--bad)}.token.good{background:var(--ok)}
+.stage{border-left:6px solid var(--c-ip)}
+.stage:nth-child(2){border-left-color:var(--c-esp)}.stage:nth-child(3){border-left-color:var(--c-iv)}
+.stage:nth-child(4){border-left-color:var(--c-enc)}.stage:nth-child(5){border-left-color:var(--c-icv)}
+.sh{display:flex;align-items:center;gap:12px}
+.badge{flex:0 0 32px;height:32px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:600}
+.why{background:#f3f6f6;border-radius:6px;padding:9px 13px;margin:10px 0 12px;color:#33405a}
+.bar{display:flex;gap:3px;margin:8px 0}
+.seg{height:40px;border-radius:4px;min-width:34px}
+.seg.enc{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.14) 0 6px,transparent 6px 12px)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:.85rem;color:var(--muted)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.mono{font-family:"IBM Plex Mono",monospace;font-size:.78rem;word-break:break-all;background:#101a30;color:#a6f0c6;border-radius:6px;padding:9px 11px}
+.mono.cipher{color:#f5c27a}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.facts{display:flex;flex-wrap:wrap;gap:4px 22px;font-size:.92rem}
+.verdict{padding:11px 14px;border-radius:6px;border-left:5px solid;margin-top:10px}
+.verdict.ok{border-color:var(--ok);background:#e0f2e8}.verdict.bad{border-color:var(--bad);background:#f8e2de}
+.hint{color:var(--muted);font-size:.9rem;margin:6px 0 0}
+dl{margin:12px 0 0;display:grid;grid-template-columns:max-content 1fr;gap:8px 18px}dt{font-weight:600}dd{margin:0;color:var(--muted)}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){.token,.node,button{transition:none}}
+@media (max-width:600px){h1{font-size:1.7rem}dl{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<h1>How ESP tunnel mode protects a packet</h1>
+<p>Two offices talk through the internet. Follow one packet from Host A to Host B and watch each gateway wrap, lock, check and unwrap it.</p>
+<div class="chips"><span class="chip"><i style="background:var(--c-iv)"></i>Confidentiality (AES-256)</span><span class="chip"><i style="background:var(--c-icv)"></i>Integrity (HMAC-SHA256)</span><span class="chip"><i style="background:var(--c-esp)"></i>Anti-replay (sequence numbers)</span></div>
+</div></header>
+<main>
+<section>
+<div class="path" id="path" aria-label="Packet route">
+<div class="token" id="tok">IP packet</div>
+<div class="node on" id="n0"><svg viewBox="0 0 32 32"><rect x="4" y="5" width="24" height="16" rx="2"/><path d="M12 27h8M16 21v6"/></svg><b>Host A</b>office 1</div><div class="link"></div>
+<div class="node" id="n1"><svg viewBox="0 0 32 32"><path d="M16 4l11 4v8c0 6-5 10-11 12C10 26 5 22 5 16V8z"/><path d="M11 16l4 4 6-7"/></svg><b>Gateway 1</b>locks the packet</div><div class="link"></div>
+<div class="node net" id="n2"><svg viewBox="0 0 32 32"><path d="M9 24a6 6 0 010-12 8 8 0 0115-2 6 6 0 011 12z"/></svg><b>Internet</b>anyone can look</div><div class="link"></div>
+<div class="node" id="n3"><svg viewBox="0 0 32 32"><path d="M16 4l11 4v8c0 6-5 10-11 12C10 26 5 22 5 16V8z"/><path d="M11 16l4 4 6-7"/></svg><b>Gateway 2</b>checks and unlocks</div><div class="link"></div>
+<div class="node" id="n4"><svg viewBox="0 0 32 32"><rect x="4" y="5" width="24" height="16" rx="2"/><path d="M12 27h8M16 21v6"/></svg><b>Host B</b>office 2</div>
+</div></section>
+
+<section>
+<h2>Set up the packet</h2>
+<div class="grid">
+<div><label for="isrc">Host A address</label><input id="isrc" value="10.0.1.5"></div>
+<div><label for="idst">Host B address</label><input id="idst" value="10.0.2.9"></div>
+<div><label for="tsrc">Gateway 1 address</label><input id="tsrc" value="192.0.2.1"></div>
+<div><label for="tdst">Gateway 2 address</label><input id="tdst" value="198.51.100.1"></div>
+</div>
+<div style="margin-top:12px"><label for="msg">Message Host A sends</label><input id="msg" value="GET /secret HTTP/1.1"></div>
+<div class="row"><button id="go">Start the walkthrough</button><button class="ghost" id="reset">Generate new keys</button></div>
+<p id="err" class="hint" role="alert"></p>
+</section>
+
+<div id="stages"></div>
+<div class="row" id="nextrow" hidden><button id="next">Next step</button></div>
+
+<section style="margin-top:8px">
+<h2>Terms used above</h2>
+<dl>
+<dt>Tunnel mode</dt><dd>The whole original packet, header included, is encrypted and placed inside a new packet. Transport mode encrypts only the data and leaves the original header visible.</dd>
+<dt>Security Association (SA)</dt><dd>The agreement between two gateways: which keys and algorithms to use. Real systems create it with IKE.</dd>
+<dt>SPI</dt><dd>A number in the ESP header that tells the receiver which SA to use.</dd>
+<dt>IV</dt><dd>A random value so the same message encrypts differently each time.</dd>
+<dt>ICV</dt><dd>A short tag (HMAC-SHA256) that proves the packet was not changed.</dd>
+<dt>Sequence number</dt><dd>Increases with every packet so an old packet cannot be sent again.</dd>
+</dl>
+</section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const COL = ["--c-ip", "--c-esp", "--c-iv", "--c-enc", "--c-icv"];
+const post = async (u, b) => (await fetch(u, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(b || {})})).json();
+const esc = s => String(s).replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]));
+const cut = (h, n = 48) => { const b = h.split(" "); return b.slice(0, n).join(" ") + (b.length > n ? " ..." : ""); };
+const color = i => `var(${COL[i]})`;
+const box = (flex, c, t, txt = "") => `<div class="seg" style="flex:${flex};background:${c}" title="${t}">${txt}</div>`;
+let R = null, built = 0, stageFns = [], sent = 0;
+
+function node(i, enc, state) {
+  for (let k = 0; k < 5; k++) $("n" + k).classList.toggle("on", k === i);
+  const n = $("n" + i), t = $("tok");
+  t.style.left = (n.offsetLeft + n.offsetWidth / 2) + "px";
+  t.className = "token" + (state ? " " + state : enc ? " enc" : "");
+  t.textContent = state === "bad" ? "dropped" : state === "good" ? "delivered" : enc ? "ESP packet (encrypted)" : "IP packet";
+}
+function stage(title, why, body) {
+  const d = document.createElement("div"); d.className = "stage";
+  const m = title.match(/^Step (\d)\. (.*)/); d.innerHTML = `<div class="sh"><span class="badge">${m[1]}</span><h2>${m[2]}</h2></div><div class="why">${why}</div>${body}`;
+  $("stages").appendChild(d); d.scrollIntoView({behavior: matchMedia("(prefers-reduced-motion:reduce)").matches ? "auto" : "smooth", block: "nearest"});
+  return d;
+}
+
+function buildStages(r) {
+  const padBlocks = r.padded_len / 16;
+  stageFns = [
+    () => { node(0, false); stage("Step 1. Host A sends an ordinary packet",
+      "Nothing is protected yet. Anyone who sees this packet can read who is talking and what they say.",
+      `<div class="facts"><span>from <b>${r.inner.src}</b></span><span>to <b>${r.inner.dst}</b></span><span>protocol TCP</span><span>${r.inner.length} bytes</span></div>
+       <p class="hint">Message: <b>${esc(r.message)}</b></p><div class="mono">${cut(r.inner_hex)}</div>`); },
+    () => { node(1, false); stage("Step 2. Gateway 1 adds a trailer so the data fits AES blocks",
+      "AES encrypts in 16-byte blocks, so padding fills the last block. Two extra bytes record how much padding was added and what is inside (4 means another IP packet, which is what makes this tunnel mode).",
+      `<div class="bar">${box(r.inner.length, color(0), "original packet", "")}${box(Math.max(r.pad_len, 1) * 3, color(1), "padding")}${box(2, color(4), "pad length and next header")}</div>
+       <div class="legend"><span><i style="background:${color(0)}"></i>original packet, ${r.inner.length} bytes</span><span><i style="background:${color(1)}"></i>padding, ${r.pad_len} bytes</span><span><i style="background:${color(4)}"></i>pad length ${r.pad_len} and next header ${r.next_header}</span></div>
+       <p class="hint">Total ${r.padded_len} bytes, which is exactly ${padBlocks} AES blocks.</p>`); },
+    () => { node(1, true); stage("Step 3. Gateway 1 encrypts everything with AES-256-CBC",
+      "The whole block is scrambled using a secret key and a fresh random IV. The inner addresses and the message can no longer be read.",
+      `<div class="two"><div><label>Before encryption (readable)</label><div class="mono">${cut(r.plain_hex, 32)}</div></div>
+       <div><label>After encryption (unreadable)</label><div class="mono cipher">${cut(r.cipher_hex, 32)}</div></div></div>
+       <p class="hint">IV used: <span class="mono" style="padding:2px 6px">${r.iv_hex}</span></p>`); },
+    () => { node(1, true); stage("Step 4. Gateway 1 adds the ESP header, a tamper-proof tag and a new outer header",
+      "The ESP header carries the SPI and sequence number. The ICV is an HMAC over header, IV and ciphertext. The new outer header uses the gateway addresses, with protocol 50 meaning ESP.",
+      `<div class="facts"><span>outer from <b>${r.outer.src}</b></span><span>to <b>${r.outer.dst}</b></span><span>protocol ${r.outer.proto} (ESP)</span><span>SPI ${r.spi}</span><span>seq ${r.seq}</span></div>
+       <div class="bar">${r.segments.map((s, i) => box(s.len, color(i), `${s.name}: ${s.len} bytes`)).join("")}</div>
+       <div class="legend">${r.segments.map((s, i) => `<span><i style="background:${color(i)}"></i>${s.name}, ${s.len} bytes</span>`).join("")}</div>
+       <p class="hint">${r.inner.length} bytes grew to ${r.outer.length} bytes. The extra bytes are the price of security.</p>`); },
+    () => { node(2, true); const d = stage("Step 5. The packet crosses the internet, then Gateway 2 checks it",
+      "Left shows everything an eavesdropper can see. Right is what Gateway 2 does. Try the attacks.",
+      `<div class="two"><div><label>Eavesdropper's view</label>
+        <div class="facts"><span>from <b>${r.outer.src}</b></span><span>to <b>${r.outer.dst}</b></span><span>ESP, SPI ${r.spi}</span></div>
+        <div class="mono cipher" style="margin-top:8px">${cut(r.cipher_hex, 24)}</div>
+        <p class="hint">Host A, Host B and the message are hidden.</p></div>
+       <div><label>Gateway 2 receives</label>
+        <div class="row" style="margin-top:0"><button id="s1">Send packet</button><button class="warn" id="s2">Send with one flipped bit</button></div>
+        <p class="hint">Send the same good packet twice to see replay protection.</p><div id="vd"></div></div></div>`);
+      const send = async tamper => {
+        let b = R.outer_hex.split(" "); if (tamper) b[50] = (parseInt(b[50], 16) ^ 1).toString(16).padStart(2, "0");
+        const x = await post("/api/decapsulate", {hex: b.join(" ")});
+        if (x.ok) node(4, false, "good"); else node(3, true, "bad");
+        $("vd").innerHTML = x.ok
+          ? `<div class="verdict ok"><b>Accepted.</b> Tag verified, then decrypted. Host B receives from ${x.inner.src} the message <b>${esc(x.payload)}</b>.</div>`
+          : `<div class="verdict bad"><b>Dropped.</b> ${esc(x.error)}</div>`;
+      };
+      d.querySelector("#s1").onclick = () => send(false); d.querySelector("#s2").onclick = () => send(true); }
+  ];
+}
+
+function advance() {
+  if (built < stageFns.length) stageFns[built++]();
+  $("nextrow").hidden = built >= stageFns.length;
+}
+
+$("go").onclick = async () => {
+  $("err").textContent = "";
+  const r = await post("/api/encapsulate", {inner_src: $("isrc").value, inner_dst: $("idst").value,
+    tunnel_src: $("tsrc").value, tunnel_dst: $("tdst").value, payload: $("msg").value});
+  if (!r.ok) { $("err").textContent = r.error; return; }
+  R = r; built = 0; node(0, false); $("stages").innerHTML = ""; buildStages(r); advance();
+};
+$("next").onclick = advance;
+$("reset").onclick = async () => {
+  await post("/api/reset"); $("stages").innerHTML = ""; $("nextrow").hidden = true; node(0, false);
+  $("err").textContent = "New keys generated. Start the walkthrough again.";
+};
+</script>
+</body>
+</html>
