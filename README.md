@@ -1,4 +1,4 @@
-# IPsec ESP Tunnel Mode Simulator (P19, BCS703)
+# IPsec ESP Tunnel Mode Simulator
 
 ## Files
 - esp_tunnel.py      core logic: IPv4 builder/parser, Security Association, ESP encapsulate/decapsulate
